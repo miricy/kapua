@@ -104,42 +104,54 @@ public class RaiseServiceEventInterceptor implements MethodInterceptor {
             LOG.info("Service name '{}' ", cleanedServiceName);
             serviceEvent.setService(cleanedServiceName);
             Object[] arguments = invocation.getArguments();
+            KapuaEntity kapuaEntity = null;
+            KapuaId scopeId = null;
+            KapuaId entityId = null;
             if (arguments != null) {
                 for (Object tmp : arguments) {
                     LOG.info("Scan for entity. Object: {}", tmp != null ? tmp.getClass() : "null");
                     if (tmp instanceof KapuaEntity) {
-                        serviceEvent.setEntityType(tmp.getClass().getName());
-                        serviceEvent.setEntityId(((KapuaEntity) tmp).getId());
-                        LOG.info("Entity '{}' with id '{}' found!", tmp.getClass().getName(), ((KapuaEntity) tmp).getId());
-                        return;
+                        kapuaEntity = (KapuaEntity) tmp;
+                        break;
                     }
-                }
-                // otherwise assume that the second identifier is the entity id (if there are more than one) or take the first one (if there is one)
-                int kapuaIdPosition = 0;
-                int kapuaIdFound = 0;
-                for (int i = 0; i < arguments.length; i++) {
-                    Object tmp = arguments[i];
                     if (tmp instanceof KapuaId) {
-                        kapuaIdPosition = i;
-                        if (++kapuaIdFound > 1) {
+                        if (entityId != null && scopeId != null) {
+                            continue;
+                        }
+                        if (entityId != null) {
+                            scopeId = entityId;
+                            entityId = (KapuaId) tmp;
                             break;
                         }
+                        else {
+                            entityId = (KapuaId) tmp;
+                        }
                     }
                 }
-                if (kapuaIdFound > 0) {
-                    serviceEvent.setEntityId(((KapuaId) arguments[kapuaIdPosition]));
-                    String serviceInterface = impementedClass[0].getAnnotatedInterfaces()[0].getType().getTypeName();
-                    String genericsList = serviceInterface.substring(serviceInterface.indexOf('<') + 1, serviceInterface.indexOf('>'));
-                    String[] entityClassesToScan = genericsList.replaceAll("\\,", "").split(" ");
-                    for (String str : entityClassesToScan) {
-                        try {
-                            if (KapuaEntity.class.isAssignableFrom(Class.forName(str))) {
-                                serviceEvent.setEntityType(str);
-                            }
-                        } catch (ClassNotFoundException e) {
-                            // do nothing
-                            LOG.warn("Cannon find class {}", str, e);
+            }
+            if (kapuaEntity != null) {
+                serviceEvent.setEntityType(kapuaEntity.getClass().getName());
+                serviceEvent.setEntityId(kapuaEntity.getId());
+                serviceEvent.setScopeId(kapuaEntity.getScopeId());
+                LOG.info("Entity '{}' with id '{}' found!", new Object[] { kapuaEntity.getClass().getName(), kapuaEntity.getId() });
+            } else {
+                // otherwise assume that the second identifier is the entity id (if there are more than one) or take the first one (if there is one)
+                if (scopeId != null) {
+                    // leave the scope id from the session if no scope id is detected ion the input parameters
+                    serviceEvent.setScopeId(scopeId);
+                }
+                serviceEvent.setEntityId(entityId);
+                String serviceInterface = impementedClass[0].getAnnotatedInterfaces()[0].getType().getTypeName();
+                String genericsList = serviceInterface.substring(serviceInterface.indexOf('<') + 1, serviceInterface.indexOf('>'));
+                String[] entityClassesToScan = genericsList.replaceAll("\\,", "").split(" ");
+                for (String str : entityClassesToScan) {
+                    try {
+                        if (KapuaEntity.class.isAssignableFrom(Class.forName(str))) {
+                            serviceEvent.setEntityType(str);
                         }
+                    } catch (ClassNotFoundException e) {
+                        // do nothing
+                        LOG.warn("Cannon find class {}", str, e);
                     }
                 }
             }

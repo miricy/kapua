@@ -11,7 +11,6 @@
  *******************************************************************************/
 package org.eclipse.kapua.commons.event;
 
-import org.eclipse.kapua.KapuaRuntimeException;
 import org.eclipse.kapua.event.ServiceEvent;
 
 import java.util.Stack;
@@ -88,14 +87,13 @@ public class ServiceEventScope {
      */
     public static void end() {
         Stack<ServiceEvent> eventStack = eventContextThdLocal.get();
-        if (eventStack != null && !eventStack.empty()) {
-            eventContextThdLocal.set(null);
-        }
-
         if (eventStack != null) {
+            if (!eventStack.empty()) {
+                eventContextThdLocal.set(null);
+            }
+            // the eventstack could be null since this method could be called also in final block to ensure the stack clean up
+            // so the pop is called here after a null check
             eventStack.pop();
-        } else {
-            throw KapuaRuntimeException.internalError("Event stack shouldn't be 'null'");
         }
     }
 }
