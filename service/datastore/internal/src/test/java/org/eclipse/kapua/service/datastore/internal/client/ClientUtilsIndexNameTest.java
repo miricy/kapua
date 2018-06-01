@@ -16,27 +16,39 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 
+import org.eclipse.kapua.KapuaException;
 import org.eclipse.kapua.commons.model.id.KapuaEid;
 import org.eclipse.kapua.model.id.KapuaId;
+import org.eclipse.kapua.service.datastore.internal.AbstractMessageStoreServiceTest;
 import org.eclipse.kapua.service.datastore.internal.mediator.DatastoreUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class ClientUtilsIndexNameTest {
+public class ClientUtilsIndexNameTest extends AbstractMessageStoreServiceTest {
 
     private static final KapuaId ONE = new KapuaEid(BigInteger.ONE);
 
     @Test
     public void test1() {
         final Instant instant = ZonedDateTime.of(2017, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC).toInstant();
-        final String name = DatastoreUtils.getDataIndexName(ONE, instant.toEpochMilli());
+        String name = null;
+        try {
+            name = DatastoreUtils.getDataIndexName(ONE, instant.toEpochMilli());
+        } catch (KapuaException kaex) {
+            Assert.fail("Error while generating index name");
+        }
         Assert.assertEquals("1-2017-01", name);
     }
 
     @Test
     public void test2() {
         final Instant instant = ZonedDateTime.of(2017, 1, 8, 0, 0, 0, 0, ZoneOffset.UTC).toInstant();
-        final String name = DatastoreUtils.getDataIndexName(ONE, instant.toEpochMilli());
+        String name = null;
+        try {
+            name = DatastoreUtils.getDataIndexName(ONE, instant.toEpochMilli());
+        } catch (KapuaException kaex) {
+            Assert.fail("Error while generating index name");
+        }
         Assert.assertEquals("1-2017-02", name);
     }
 }

@@ -14,9 +14,13 @@ package org.eclipse.kapua.service.datastore.internal;
 import org.eclipse.kapua.KapuaException;
 import org.eclipse.kapua.commons.model.id.KapuaEid;
 import org.eclipse.kapua.commons.util.KapuaDateUtils;
+import org.eclipse.kapua.locator.KapuaLocator;
+import org.eclipse.kapua.model.id.KapuaId;
+import org.eclipse.kapua.service.datastore.MessageStoreService;
+import org.eclipse.kapua.service.datastore.client.ClientException;
 import org.eclipse.kapua.service.datastore.internal.mediator.DatastoreException;
 import org.eclipse.kapua.service.datastore.internal.mediator.DatastoreUtils;
-import org.eclipse.kapua.test.KapuaTest;
+
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,18 +28,23 @@ import org.slf4j.LoggerFactory;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
-public class IndexCalculatorTest extends KapuaTest {
+public class IndexCalculatorTest extends AbstractMessageStoreServiceTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexCalculatorTest.class);
 
+    private final MessageStoreService messageStoreService = KapuaLocator.getInstance().getService(MessageStoreService.class);
+    private final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
     @Test
     public void testIndex() throws KapuaException, ParseException, InterruptedException {
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
         // performTest(sdf.parse("01/01/2000 13:12"), sdf.parse("01/01/2020 13:12"), buildExpectedResult("1", 1, 2000, 1, 2020, new int[] {
         // 53,// 2000 for locale us - 52 for locale "Europe"
         // 52,// 2001
@@ -71,7 +80,48 @@ public class IndexCalculatorTest extends KapuaTest {
         performTest(sdf.parse("01/01/2017 13:12"), sdf.parse("06/01/2017 13:12"), null);
     }
 
-    private void performTest(Date startDate, Date endDate, String[] expectedIndexes) throws DatastoreException {
+    @Test
+    public void dataIndexNameByScopeId() {
+        assertEquals("1-*", DatastoreUtils.getDataIndexName(KapuaId.ONE));
+    }
+
+    @Test
+    public void dataIndexNameByScopeIdAndTimestamp() throws KapuaException, ParseException {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("enabled", true);
+        settings.put("dataTTL", 30);
+        settings.put("rxByteLimit", 0);
+        settings.put("dataIndexBy", "DEVICE_TIMESTAMP");
+
+        // Index by Week
+        settings.put(DatastoreUtils.INDEXING_WINDOW_OPTION, DatastoreUtils.INDEXING_WINDOW_OPTION_WEEK);
+        messageStoreService.setConfigValues(KapuaId.ONE, null, settings);
+        String weekIndexName = DatastoreUtils.getDataIndexName(KapuaId.ONE, sdf.parse("02/01/2017 13:12").getTime());
+        assertEquals("1-2017-01", weekIndexName);
+
+        // Index by Day
+        settings.put(DatastoreUtils.INDEXING_WINDOW_OPTION, DatastoreUtils.INDEXING_WINDOW_OPTION_DAY);
+        messageStoreService.setConfigValues(KapuaId.ONE, null, settings);
+        String dayIndexName = DatastoreUtils.getDataIndexName(KapuaId.ONE, sdf.parse("02/01/2017 13:12").getTime());
+        assertEquals("1-2017-01-02", dayIndexName);
+
+        // Index by Day
+        settings.put(DatastoreUtils.INDEXING_WINDOW_OPTION, DatastoreUtils.INDEXING_WINDOW_OPTION_HOUR);
+        messageStoreService.setConfigValues(KapuaId.ONE, null, settings);
+        String hourIndexName = DatastoreUtils.getDataIndexName(KapuaId.ONE, sdf.parse("02/01/2017 13:12").getTime());
+        assertEquals("1-2017-01-02-12", hourIndexName);     // Index Hour is UTC!
+
+        // TODO - Reset config for other tests; provide new tests where needed
+        settings.put(DatastoreUtils.INDEXING_WINDOW_OPTION, DatastoreUtils.INDEXING_WINDOW_OPTION_WEEK);
+        messageStoreService.setConfigValues(KapuaId.ONE, null, settings);
+    }
+
+    @Test
+    public void registryIndexNameByScopeId() {
+        assertEquals(".1", DatastoreUtils.getRegistryIndexName(KapuaId.ONE));
+    }
+
+    private void performTest(Date startDate, Date endDate, String[] expectedIndexes) throws DatastoreException, ClientException {
         Calendar calStartDate = Calendar.getInstance(TimeZone.getTimeZone("UTC"), KapuaDateUtils.getLocale());
         calStartDate.setTimeInMillis(startDate.getTime());
         Calendar calEndDate = Calendar.getInstance(TimeZone.getTimeZone("UTC"), KapuaDateUtils.getLocale());
@@ -83,7 +133,7 @@ public class IndexCalculatorTest extends KapuaTest {
                 calEndDate.get(Calendar.WEEK_OF_YEAR),
                 calEndDate.get(Calendar.DAY_OF_WEEK));
 
-        String[] index = DatastoreUtils.convertToDataIndexes(KapuaEid.ONE, startDate.toInstant(), endDate.toInstant());
+        String[] index = DatastoreUtils.convertToDataIndexes(getDataIndexesByAccount(KapuaEid.ONE), KapuaEid.ONE, startDate.toInstant(), endDate.toInstant());
         compareResult(expectedIndexes, index);
     }
 
@@ -116,4 +166,7 @@ public class IndexCalculatorTest extends KapuaTest {
         }
     }
 
+    private List<String> getDataIndexesByAccount(KapuaId scopeId) throws ClientException {
+        return Arrays.asList(buildExpectedResult("1", 1, 2015, 52, 2018, new int[] { 53, 52, 52, 52 }));
+    }
 }
